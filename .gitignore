@@ -1,0 +1,50 @@
+# ----------------------------------------
+# General Project Ignores
+# ----------------------------------------
+
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# ----------------------------------------
+# Flask/Python Backend Ignores
+# ----------------------------------------
+
+venv/
+
+__pycache__/
+*.py[cod]
+*$py.class
+
+.Python
+*.egg-info/
+dist/
+build/
+
+*.log
+
+/server/.env
+
+*.db
+*.sqlite3
+
+# ----------------------------------------
+# React/JavaScript Frontend Ignores
+# ----------------------------------------
+
+/client/node_modules/
+
+/client/build/
+/client/dist/
+
+npm-debug.log*
+yarn-debug.log*
+.eslintcache
+
+/client/.env.local
+/client/.env.development.local
+/client/.env.test.local
+/client/.env.production.local
