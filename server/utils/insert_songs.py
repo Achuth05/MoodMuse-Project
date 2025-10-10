@@ -1,117 +1,149 @@
 import os
 import requests
-import time
-from supabase import create_client
+from supabase import create_client, Client
 from dotenv import load_dotenv
 
 load_dotenv()
+
+SPOTIFY_CLIENT = os.getenv("SPOTIFY_CLIENT")
+SPOTIFY_SECRET = os.getenv("SPOTIFY_SECRET")
 SUP_URL = os.getenv("SUP_URL")
 SUP_KEY = os.getenv("SUP_KEY")
-SPOTIFY_CLIENT_ID = os.getenv("SPOTIFY_CLIENT_ID")
-SPOTIFY_CLIENT_SECRET = os.getenv("SPOTIFY_CLIENT_SECRET")
-sb = create_client(SUP_URL, SUP_KEY)
 
+supabase: Client = create_client(SUP_URL, SUP_KEY)
+
+# Mood → Playlist IDs (multi-language)
 playlists = {
     "Happy / Joyful": [
-        "37i9dQZF1DXdPec7aLTmlC",  
-        "37i9dQZF1DWVDCf4FD9pC9",  
-        "37i9dQZF1DWXb9I5xoXLjp",  
+        ("English", "37i9dQZF1DXdPec7aLTmlC"),
+        ("Hindi", "37i9dQZF1DWXML2TtZaZA6"),
+        ("Malayalam", "37i9dQZF1DWTU5gMuwYgOa"),
+        ("Tamil", "37i9dQZF1DX7gIoKXt0gmx"),
     ],
     "Sad / Melancholic": [
-        "37i9dQZF1DX7qK8ma5wgG1",  
-        "37i9dQZF1DWY6tYEFs22tT", 
-        "37i9dQZF1DX5qyq3XOBAKw", 
-        "37i9dQZF1DX3bcfiyW6qms",
-
+        ("English", "37i9dQZF1DX7qK8ma5wgG1"),
+        ("Hindi", "37i9dQZF1DWXJfnUiYjUKT"),
+        ("Malayalam", "37i9dQZF1DWTmu53PG4oHg"),
+        ("Tamil", "37i9dQZF1DX4t7T1C8wgVU"),
     ],
     "Romantic / Love": [
-        "37i9dQZF1DWXb9I5xoXLjp",  
-        "37i9dQZF1DWXT8uSSn6PRy", 
-        "37i9dQZF1DWZl8q7n9GQz1",  
+        ("English", "37i9dQZF1DXbHcQGb8qq2R"),
+        ("Hindi", "37i9dQZF1DX5q67ZpWyRrZ"),
+        ("Malayalam", "37i9dQZF1DWTYKFyn3n6AA"),
+        ("Tamil", "37i9dQZF1DWVDCf4FD9pC9"),
     ],
     "Energetic / Excited": [
-        "37i9dQZF1DX76Wlfdnj7AP",  
-        "37i9dQZF1DXdxcBWuJkbcy",  
-        "37i9dQZF1DX5li09tuOCOl",  
+        ("English", "37i9dQZF1DX76Wlfdnj7AP"),
+        ("Hindi", "37i9dQZF1DX3PIPIT6lEg5"),
+        ("Malayalam", "37i9dQZF1DWT6QQx7aSxUt"),
+        ("Tamil", "37i9dQZF1DX9qNZdM354sX"),
     ],
     "Calm / Relaxed / Chill": [
-        "37i9dQZF1DX4WYpdgoIcn6",  
-        "37i9dQZF1DWVckOBA0dTYU",  
-        "37i9dQZF1DX8vy6e9uJRjo",  
+        ("English", "37i9dQZF1DX4WYpdgoIcn6"),
+        ("Hindi", "37i9dQZF1DX4Y4VrJZybG3"),
+        ("Malayalam", "37i9dQZF1DWTQnBzt7K5G0"),
+        ("Tamil", "37i9dQZF1DWYxwmBaMqxsl"),
     ],
     "Serious / Thoughtful": [
-        "37i9dQZF1DWVrtsSlLKzro",  
-        "37i9dQZF1DXbmrSXQ5AIM2",  
+        ("English", "37i9dQZF1DWVrtsSlLKzro"),
+        ("Hindi", "37i9dQZF1DX7sT9e8nwhSL"),
+        ("Malayalam", "37i9dQZF1DX6n88Xxg8u1f"),
+        ("Tamil", "37i9dQZF1DX3ZJp8vZeb3A"),
     ]
 }
 
+# Map mood name → mood_id (adjust IDs based on your DB)
+mood_map = {
+    "Happy / Joyful": 1,
+    "Sad / Melancholic": 2,
+    "Romantic / Love": 3,
+    "Energetic / Excited": 4,
+    "Calm / Relaxed / Chill": 5,
+    "Serious / Thoughtful": 6,
+}
+
+# --- Spotify Auth ---
 def get_spotify_token():
-    auth_resp = requests.post(
+    resp = requests.post(
         "https://accounts.spotify.com/api/token",
         data={"grant_type": "client_credentials"},
-        auth=(SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET),
+        auth=(SPOTIFY_CLIENT, SPOTIFY_SECRET)
     )
-    return auth_resp.json().get("access_token")
+    data = resp.json()
+    if "access_token" not in data:
+        raise Exception(f"Spotify Auth Failed: {data}")
+    return data["access_token"]
 
-token = get_spotify_token()
-headers = {"Authorization": f"Bearer {token}"}
-
-def get_audio_features(track_id):
+# --- Fetch Audio Features (valence, energy, tempo) ---
+def fetch_audio_features(track_id, token):
     url = f"https://api.spotify.com/v1/audio-features/{track_id}"
-    resp = requests.get(url, headers=headers).json()
-    return resp.get("valence"), resp.get("energy"), resp.get("tempo")
+    headers = {"Authorization": f"Bearer {token}"}
+    resp = requests.get(url, headers=headers)
+    if resp.status_code != 200:
+        return None
+    data = resp.json()
+    return {
+        "valence": data.get("valence"),
+        "energy": data.get("energy"),
+        "tempo": data.get("tempo"),
+    }
 
-def get_all_tracks(playlist_id):
-    tracks = []
-    limit = 100
-    offset = 0
-    while True:
-        url = f"https://api.spotify.com/v1/playlists/{playlist_id}/tracks?limit={limit}&offset={offset}"
-        resp = requests.get(url, headers=headers).json()
-        items = resp.get("items", [])
-        if not items:
-            break
-        tracks.extend(items)
-        offset += limit
-    return tracks
+# --- Fetch Playlist Songs (with pagination) ---
+
+def fetch_playlist_tracks(playlist_id):
+    url = f"https://api.spotify.com/v1/playlists/{playlist_id}/tracks"
+    params = {"market": "IN", "limit": 100}
+    resp = requests.get(url, params=params).json()
+    if "error" in resp:
+        print("Error fetching:", resp)
+        return []
+    return resp.get("items", [])
+
+    all_tracks = []
+    data = resp.json()
+    if "items" not in data:
+        print("Error:", data)
+
+    for item in data["items"]:
+        track = item.get("track")
+        if track:
+            release_year = None
+            if "release_date" in track["album"]:
+                release_year = track["album"]["release_date"].split("-")[0]
+                all_tracks.append({
+                    "spotify_id": track["id"],
+                    "title": track["name"],
+                    "artist": ", ".join([a["name"] for a in track["artists"]]),
+                    "release_year": release_year,
+                })
+
+    url = data.get("next")  # pagination
+    return all_tracks
+
+# --- Insert into Supabase ---
+def insert_tracks(mood, language, playlist_id, token):
+    tracks = fetch_playlist_tracks(playlist_id)
+    print(f"Fetched {len(tracks)} songs from {playlist_id} ({mood} - {language})")
+
+    for song in tracks:
+        features = fetch_audio_features(song["spotify_id"], token) or {}
+        supabase.table("songs").insert({
+            "spotify_id": song["spotify_id"],
+            "title": song["title"],
+            "artist": song["artist"],
+            "release_year": song["release_year"],
+            "valence": features.get("valence"),
+            "energy": features.get("energy"),
+            "tempo": features.get("tempo"),
+            "mood_id": mood_map[mood]
+        }).execute()
+
+# --- Main ---
+if __name__ == "__main__":
+    token = get_spotify_token()
+
+    for mood, playlist_list in playlists.items():
+        for language, playlist_id in playlist_list:
+            insert_tracks(mood, language, playlist_id, token)
 
 
-for mood_name, playlist_ids in playlists.items():
-    mood = sb.table("moods").select("mood_id").eq("mood_name", mood_name).execute()
-    if not mood.data:
-        continue
-    mood_id = mood.data[0]["mood_id"]
-
-    for playlist_id in playlist_ids:
-        tracks = get_all_tracks(playlist_id)
-        for t in tracks:
-            track = t["track"]
-            if not track:
-                continue
-
-            spotify_id = track["id"]
-            title = track["name"]
-            artist = track["artists"][0]["name"]
-            release_year = int(track["album"]["release_date"].split("-")[0]) if track["album"]["release_date"] else None
-
-            existing = sb.table("songs").select("spotify_id").eq("spotify_id", spotify_id).execute()
-            if existing.data:
-                continue
-
-            valence, energy, tempo = get_audio_features(spotify_id)
-
-            sb.table("songs").insert({
-                "spotify_id": spotify_id,
-                "title": title,
-                "artist": artist,
-                "release_year": release_year,
-                "valence": valence,
-                "energy": energy,
-                "tempo": tempo,
-                "mood_id": mood_id
-            }).execute()
-
-        print(f"Inserted {len(tracks)} songs from playlist {playlist_id} into mood {mood_name}")
-        time.sleep(0.3)
-
-print("Songs populated!")
