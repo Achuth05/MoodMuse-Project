@@ -7,8 +7,8 @@ app = Flask(__name__)
 CORS(app)  # Allow requests from frontend (React)
 
 # Register Blueprints
-app.register_blueprint(auth_bp, url_prefix="/api/auth")
-app.register_blueprint(recommendation_bp, url_prefix="/api/recommendations")
+app.register_blueprint(auth_bp, url_prefix="/auth")
+app.register_blueprint(recommendation_bp, url_prefix="/recommendations")
 
 @app.route("/")
 def home():
