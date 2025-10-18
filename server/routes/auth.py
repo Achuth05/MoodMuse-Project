@@ -2,6 +2,7 @@ from flask import Blueprint, request, jsonify
 from supabase import create_client, Client
 import os
 from dotenv import load_dotenv
+from utils.sup_client import sb
 
 load_dotenv()
 
@@ -14,6 +15,7 @@ auth_bp = Blueprint('auth', __name__)
 @auth_bp.route('/register', methods=['POST'])
 def register():
     data = request.get_json()
+    name = data.get('name')  # optional
     email = data.get('email')
     password = data.get('password')
 
@@ -21,20 +23,21 @@ def register():
         return jsonify({"error": "Email and password are required"}), 400
 
     try:
-        response = supabase.auth.sign_up({
+        response = sb.auth.sign_up({
             "email": email,
             "password": password
         })
         if response.user:
+            # optionally store 'name' in your users table
             return jsonify({
                 "message": "User registered successfully!",
-                "user": response.user.email
+                "user": response.user.email,
+                "name": name
             }), 201
         else:
             return jsonify({"error": "Registration failed"}), 400
     except Exception as e:
         return jsonify({"error": str(e)}), 400
-
 
 
 @auth_bp.route('/login', methods=['POST'])
@@ -47,7 +50,7 @@ def login():
         return jsonify({"error": "Email and password are required"}), 400
 
     try:
-        response = supabase.auth.sign_in_with_password({
+        response = sb.auth.sign_in_with_password({
             "email": email,
             "password": password
         })

@@ -1,7 +1,8 @@
 import os
 from openai import OpenAI
-API_KEY=os.getenv("OPENAI_API_KEY")
-client = OpenAI(API_KEY)
+
+client = OpenAI(api_key=os.getenv("OPEN_AI_KEY"))
+
 
 pre_moods = [
     "Happy / Joyful",
@@ -19,7 +20,7 @@ def extract_mood(user_text: str) -> str:
     The user described their mood as: "{user_text}".
     Choose the single most fitting mood from this list only:
     {", ".join(pre_moods)}.
-    Reply with only the mood text, nothing else.
+    Reply with only the mood text, return the exact mood from the list even if there is slash and whitespace, nothing else. 
     """
 
     try:
