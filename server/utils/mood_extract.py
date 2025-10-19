@@ -1,8 +1,8 @@
 import os
 from openai import OpenAI
+from difflib import get_close_matches
 
 client = OpenAI(api_key=os.getenv("OPEN_AI_KEY"))
-
 
 pre_moods = [
     "Happy / Joyful",
@@ -15,26 +15,50 @@ pre_moods = [
     "Motivational / Inspirational"
 ]
 
+import re
+
 def extract_mood(user_text: str) -> str:
-    prompt = f"""
-    The user described their mood as: "{user_text}".
-    Choose the single most fitting mood from this list only:
-    {", ".join(pre_moods)}.
-    Reply with only the mood text, return the exact mood from the list even if there is slash and whitespace, nothing else. 
-    """
+    text = user_text.lower().strip()
 
-    try:
-        response = client.chat.completions.create(
-            model="gpt-4o-mini", 
-            messages=[{"role": "user", "content": prompt}],
-            max_tokens=20,
-            temperature=0
-        )
-        mood_name = response.choices[0].message.content.strip()
-        if mood_name not in pre_moods:
-            return None
-        return mood_name
-    except Exception as e:
-        print("OpenAI error:", e)
-        return None
+    mood_keywords = {
+        "Happy / Joyful": [
+            "happy", "joy", "joyful", "delighted", "smile", "laugh", "cheerful",
+            "great", "good", "amazing", "awesome", "excited", "fun", "positive"
+        ],
+        "Sad / Melancholic": [
+            "sad", "depressed", "cry", "crying", "tears", "lonely", "down",
+            "heartbroken", "gloomy", "upset", "bad", "hurt", "hopeless"
+        ],
+        "Romantic / Love": [
+            "love", "romantic", "heart", "crush", "affection", "caring", "sweet",
+            "admire", "couple", "date", "relationship", "beautiful", "cute"
+        ],
+        "Energetic / Excited": [
+            "energetic", "excited", "pumped", "hyped", "ready", "motivated",
+            "thrilled", "dynamic", "active", "powerful", "alive", "charged"
+        ],
+        "Calm / Relaxed / Chill": [
+            "calm", "relaxed", "peaceful", "chill", "soothing", "gentle", "cozy",
+            "comfortable", "tranquil", "easygoing", "rest", "slow"
+        ],
+        "Serious / Thoughtful": [
+            "serious", "thinking", "thoughtful", "deep", "focus", "reflect",
+            "pensive", "philosophical", "quiet", "introspective", "study", "concentrate"
+        ],
+        "Scary / Fearful / Dark": [
+            "scared", "fear", "dark", "terrified", "horror", "nervous",
+            "afraid", "panic", "creepy", "tense", "ghost", "nightmare"
+        ],
+        "Motivational / Inspirational": [
+            "motivate", "motivated", "inspired", "goal", "dream", "success",
+            "determined", "focus", "ambition", "dedicated", "driven", "positive", "confidence"
+        ]
+    }
 
+    # 🔍 Match using substring logic (not exact word)
+    for mood, keywords in mood_keywords.items():
+        for kw in keywords:
+            if re.search(rf"\b{kw}\w*\b", text):  # Matches cry, crying, cries, etc.
+                return mood
+
+    return None

@@ -9,8 +9,11 @@ def recommend_content():
     data = request.get_json()
     mood_name = data.get("mood")
     text = data.get("text") 
-    content_type = data.get("content_type", "movies") 
+    content_type = data.get("content_type", "movies")
     language = data.get("language")
+    page = int(data.get("page", 1))
+    limit = int(data.get("limit", 20))
+    offset = (page - 1) * limit
 
     # Extract mood if not provided
     if text and not mood_name:
@@ -32,13 +35,15 @@ def recommend_content():
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 
-    # Fetch content matching mood and language
+    # Fetch content matching mood and language with pagination
     try:
         query = sb.table(content_type).select("*").eq("mood_id", mood_id)
         if language:
             query = query.eq("language", language)
-        results = query.limit(20).execute()
-        data_list = results.data if results.data else []
+
+        # Supabase uses range(offset, offset+limit-1) for pagination
+        results = query.range(offset, offset + limit - 1).execute()
+        data_list = results.data or []
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 
@@ -47,3 +52,4 @@ def recommend_content():
         "count": len(data_list),
         "results": data_list
     })
+
