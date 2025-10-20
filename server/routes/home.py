@@ -28,12 +28,18 @@ def recommend_content():
 
     # Fetch mood_id from DB
     try:
-        mood_resp = sb.table("moods").select("mood_id").eq("mood_name", mood_name).execute()
+        # Try exact match first
+        mood_resp = sb.table("moods").select("mood_id, mood_name").eq("mood_name", mood_name).execute()
+        if not mood_resp.data:
+            # Fallback: case-insensitive partial match (ilike) so 'Happy' matches 'Happy / Joyful'
+            mood_resp = sb.table("moods").select("mood_id, mood_name").ilike("mood_name", f"%{mood_name}%").execute()
+
         if not mood_resp.data:
             return jsonify({"error": "Mood not found in DB"}), 404
+
         mood_id = mood_resp.data[0]["mood_id"]
     except Exception as e:
-        return jsonify({"error": str(e)}), 400
+        return jsonify({"error": "Database query failed: " + str(e)}), 400
 
     # Fetch content matching mood and language with pagination
     try:

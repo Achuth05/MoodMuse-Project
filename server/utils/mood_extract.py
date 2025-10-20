@@ -19,7 +19,6 @@ import re
 
 def extract_mood(user_text: str) -> str:
     text = user_text.lower().strip()
-
     mood_keywords = {
         "Happy / Joyful": [
             "happy", "joy", "joyful", "delighted", "smile", "laugh", "cheerful",
@@ -58,7 +57,7 @@ def extract_mood(user_text: str) -> str:
     # 🔍 Match using substring logic (not exact word)
     for mood, keywords in mood_keywords.items():
         for kw in keywords:
-            if re.search(rf"\b{kw}\w*\b", text):  # Matches cry, crying, cries, etc.
+            if re.search(rf"\b{kw}\w*\b", text):  
                 return mood
 
     return None

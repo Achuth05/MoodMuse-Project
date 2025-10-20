@@ -8,7 +8,7 @@ load_dotenv()
 SUP_URL = os.getenv("SUP_URL")
 SUP_KEY = os.getenv("SUP_KEY")
 TMDB_KEY = os.getenv("TMDB_KEY")
-sb = create_client(SUP_URL, SUP_KEY)
+sb = create_client(SUP_URL, SUP_KEY)      
 
 map = {
     "Comedy": "Happy / Joyful",
@@ -43,7 +43,7 @@ def fetch_url(url, retries=5, delay=2):
             time.sleep(delay)
     return None
 
-languages = ["en", "hi", "ta", "ml", "te", "kn"]
+languages = ["en", "hi", "ta", "ml", "te", "kn"] 
 
 for lang in languages:
     print(f"Fetching series in language: {lang}")
