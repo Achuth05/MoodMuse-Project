@@ -3,7 +3,7 @@ import { toast } from "sonner";
 
 const BASE_URL = "http://localhost:5000";
 
-export function Recommendations({ mood, text, contentType, language, onBack, userName }) {
+export function Recommendations({ mood, text, contentType, language, onBack, userName, userEmail }) {
   const [recommendations, setRecommendations] = useState([]);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
@@ -14,7 +14,7 @@ export function Recommendations({ mood, text, contentType, language, onBack, use
       const res = await fetch(`${BASE_URL}/home/`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ mood, text, content_type: contentType, language, page: pageNum, limit }),
+        body: JSON.stringify({ mood, text, content_type: contentType, language, page: pageNum, limit, user_id: userEmail }),
       });
       const data = await res.json();
       console.log("Fetched recommendations:", data);
@@ -57,9 +57,64 @@ export function Recommendations({ mood, text, contentType, language, onBack, use
 
       <ul className="space-y-3">
         {recommendations.length > 0 ? (
-          recommendations.map((item, i) => (
-            <li key={i} className="border p-3 rounded-xl bg-gray-50">{item.title}</li>
-          ))
+          recommendations.map((item, i) => {
+            const key = item.api_id || item.id || item.title || i;
+            const title = item.title || item.name || item.track_name || "Untitled";
+            const artist = item.artist || item.artists || item.performer || item.director;
+            const genre = item.genre || item.genres || (item.genre_names && item.genre_names.join(", "));
+            const year = item.release_year || item.year || item.first_air_date || item.release_date;
+            const desc = item.description || item.overview || item.summary || item.plot;
+
+            return (
+              <li key={key} className="border p-3 rounded-xl bg-gray-50">
+                <div className="flex items-start gap-4">
+                  {/* Poster / thumbnail if available */}
+                  {item.poster_path || item.image || item.thumbnail ? (
+                    <img
+                      src={item.poster_path || item.image || item.thumbnail}
+                      alt={title}
+                      className="w-20 h-28 object-cover rounded"
+                    />
+                  ) : null}
+
+                  <div className="flex-1 text-left">
+                    <div className="flex items-baseline justify-between">
+                      <h3 className="font-semibold text-lg">{title}</h3>
+                      {year && <span className="text-sm text-gray-500 ml-2">{String(year).slice(0,4)}</span>}
+                    </div>
+
+                    {artist && <div className="text-sm text-gray-700">{Array.isArray(artist) ? artist.join(", ") : artist}</div>}
+                    {genre && <div className="text-sm text-gray-500">{genre}</div>}
+
+                    {desc && <p className="mt-2 text-sm text-gray-700">{desc}</p>}
+
+                    {/* Song-specific audio features */}
+                    {contentType === "songs" && (item.valence !== undefined || item.energy !== undefined || item.tempo !== undefined) && (
+                      <div className="mt-2 text-sm text-gray-600">
+                        {item.valence !== undefined && <span className="mr-3">Valence: {Number(item.valence).toFixed(2)}</span>}
+                        {item.energy !== undefined && <span className="mr-3">Energy: {Number(item.energy).toFixed(2)}</span>}
+                        {item.tempo !== undefined && <span>Tempo: {Math.round(item.tempo)}</span>}
+                      </div>
+                    )}
+
+                    {/* External links (Spotify etc.) */}
+                    <div className="mt-3 flex gap-3 items-center">
+                      {item.spotify_id && (
+                        <a
+                          className="text-sm text-green-600 hover:underline"
+                          href={`https://open.spotify.com/track/${item.spotify_id}`}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          Open on Spotify
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </li>
+            );
+          })
         ) : (
           <p>No recommendations found</p>
         )}

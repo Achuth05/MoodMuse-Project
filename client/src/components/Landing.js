@@ -1,13 +1,14 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
-export function Landing({ onMoodSubmit, currentLanguage, userName }) {
+export function Landing({ onMoodSubmit, currentLanguage, userName, userEmail }) {
   const [text, setText] = useState("");
   const [selectedMood, setSelectedMood] = useState("");
   const [selectedContentType, setSelectedContentType] = useState("movies");
   const [selectedLanguage, setSelectedLanguage] = useState(currentLanguage);
+  const [recentActivity, setRecentActivity] = useState([]);
 
-  const moods = ["Happy", "Sad", "Romantic", "Energetic", "Calm"];
-  const contentTypes = ["movies", "songs", "series"];
+  const moods = ["Happy / Joyful", "Sad / Melancholic", "Romantic / Love", "Energetic / Excited", "Calm / Relaxed"];
+  const contentTypes = ["movies", "series"];
   const languages = [
     { code: "en", name: "English" },
     { code: "ml", name: "Malayalam" },
@@ -17,17 +18,67 @@ export function Landing({ onMoodSubmit, currentLanguage, userName }) {
     { code: "kn", name: "Kannada" },
   ];
 
-  const handleSubmit = () => {
+  // Fetch recent activity on load
+  useEffect(() => {
+    const fetchActivity = async () => {
+      try {
+        const id = userEmail || userName;
+        if (!id) return;
+        const res = await fetch(`/get_recent_activity?user_id=${encodeURIComponent(id)}`);
+        const data = await res.json();
+        setRecentActivity(data.activities || []);
+      } catch (err) {
+        console.error("Failed to fetch recent activity:", err);
+      }
+    };
+    fetchActivity();
+  }, [userName, userEmail]);
+
+  const handleSubmit = async () => {
     if (!selectedMood && !text) {
       alert("Please select a mood or enter text describing your mood");
       return;
     }
+
+    // Trigger recommendations in parent component
     onMoodSubmit(selectedMood, selectedContentType, selectedLanguage, text);
+
+    // Log activity to backend
+    try {
+      const id = userEmail || userName;
+      if (id) {
+        await fetch("/log_activity", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            user_id: id,
+            action: `searched for ${selectedContentType}`,
+            mood: selectedMood || text,
+          }),
+        });
+      }
+    } catch (err) {
+      console.error("Failed to log activity:", err);
+    }
   };
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen text-center p-6">
-      <h1 className="text-4xl font-bold mb-6">🎵 MoodMuse</h1>
+      <h1 className="text-4xl font-bold mb-6"> MoodMuse</h1>
+
+      {/* Recent activity */}
+      {recentActivity.length > 0 && (
+        <div className="p-4 mb-6 bg-yellow-100 rounded w-full max-w-md">
+          <h3 className="font-semibold mb-2">Recent Activity:</h3>
+          <ul className="list-disc list-inside text-left">
+            {recentActivity.map((act) => (
+              <li key={act.log_id}>
+                {act.action} - <span className="font-medium">{act.mood}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       <textarea
         placeholder="Describe your mood..."

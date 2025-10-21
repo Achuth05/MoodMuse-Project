@@ -122,6 +122,7 @@ export default function App() {
           onMoodSubmit={handleMoodSubmit}
           currentLanguage={selectedLanguage}
           userName={user.name}
+          userEmail={user.email}
         />
       )}
 
@@ -134,6 +135,7 @@ export default function App() {
           language={selectedLanguage}
           onBack={handleBackToLanding}
           userName={user.name}
+          userEmail={user.email}
         />
       )}
 
