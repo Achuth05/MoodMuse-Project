@@ -1,11 +1,14 @@
 import { useState, useEffect } from "react";
 
-export function Landing({ onMoodSubmit, currentLanguage, userName, userEmail }) {
+const BASE_URL = "http://localhost:5000";
+
+export function Landing({ onMoodSubmit, currentLanguage, userName, userEmail, userId }) {
   const [text, setText] = useState("");
   const [selectedMood, setSelectedMood] = useState("");
   const [selectedContentType, setSelectedContentType] = useState("movies");
   const [selectedLanguage, setSelectedLanguage] = useState(currentLanguage);
   const [recentActivity, setRecentActivity] = useState([]);
+  const [loadingActivity, setLoadingActivity] = useState(false);
 
   const moods = ["Happy / Joyful", "Sad / Melancholic", "Romantic / Love", "Energetic / Excited", "Calm / Relaxed"];
   const contentTypes = ["movies", "series"];
@@ -18,21 +21,33 @@ export function Landing({ onMoodSubmit, currentLanguage, userName, userEmail }) 
     { code: "kn", name: "Kannada" },
   ];
 
-  // Fetch recent activity on load
+  // Fetch recent activity on load / when userId changes
   useEffect(() => {
     const fetchActivity = async () => {
+      if (!userId) return;
+      
       try {
-        const id = userEmail || userName;
-        if (!id) return;
-        const res = await fetch(`/get_recent_activity?user_id=${encodeURIComponent(id)}`);
+        setLoadingActivity(true);
+        const res = await fetch(`${BASE_URL}/home/get_recent_activity?user_id=${encodeURIComponent(userId)}&limit=10`);
         const data = await res.json();
-        setRecentActivity(data.activities || []);
+        
+        if (res.ok) {
+          const acts = data.activities || [];
+          setRecentActivity(acts);
+        } else {
+          console.error("Failed to fetch recent activity:", data);
+          setRecentActivity([]);
+        }
       } catch (err) {
         console.error("Failed to fetch recent activity:", err);
+        setRecentActivity([]);
+      } finally {
+        setLoadingActivity(false);
       }
     };
+    
     fetchActivity();
-  }, [userName, userEmail]);
+  }, [userId]);
 
   const handleSubmit = async () => {
     if (!selectedMood && !text) {
@@ -43,19 +58,30 @@ export function Landing({ onMoodSubmit, currentLanguage, userName, userEmail }) 
     // Trigger recommendations in parent component
     onMoodSubmit(selectedMood, selectedContentType, selectedLanguage, text);
 
-    // Log activity to backend
+    // Log activity to backend using the /home/log_activity endpoint
     try {
-      const id = userEmail || userName;
-      if (id) {
-        await fetch("/log_activity", {
+      if (userId) {
+        const resp = await fetch(`${BASE_URL}/home/log_activity`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            user_id: id,
+            user_id: userId,
             action: `searched for ${selectedContentType}`,
             mood: selectedMood || text,
           }),
         });
+
+        if (!resp.ok) {
+          const err = await resp.json().catch(() => ({}));
+          console.error("Log activity failed:", err);
+        } else {
+          // Optimistically prepend the new activity so it's visible immediately
+          const body = await resp.json().catch(() => ({}));
+          const newAct = body.activity || null;
+          if (newAct) {
+            setRecentActivity((prev) => [newAct, ...prev].slice(0, 10));
+          }
+        }
       }
     } catch (err) {
       console.error("Failed to log activity:", err);
@@ -64,21 +90,29 @@ export function Landing({ onMoodSubmit, currentLanguage, userName, userEmail }) 
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen text-center p-6">
-      <h1 className="text-4xl font-bold mb-6"> MoodMuse</h1>
+      <h1 className="text-4xl font-bold mb-6">🎭 MoodMuse</h1>
 
       {/* Recent activity */}
-      {recentActivity.length > 0 && (
+      {loadingActivity ? (
+        <div className="p-4 mb-6 bg-yellow-100 rounded w-full max-w-md">Loading recent activity...</div>
+      ) : recentActivity && recentActivity.length > 0 ? (
         <div className="p-4 mb-6 bg-yellow-100 rounded w-full max-w-md">
-          <h3 className="font-semibold mb-2">Recent Activity:</h3>
+          <h3 className="font-semibold mb-2">📜 Recent Activity:</h3>
           <ul className="list-disc list-inside text-left">
-            {recentActivity.map((act) => (
-              <li key={act.log_id}>
-                {act.action} - <span className="font-medium">{act.mood}</span>
+            {recentActivity.map((act, idx) => (
+              <li key={act.log_id || act.id || idx} className="mb-1">
+                <span className="text-sm text-gray-700">{act.action}</span>
+                <span className="font-medium ml-2">({act.mood})</span>
+                {act.created_at && (
+                  <span className="text-xs text-gray-500 ml-2">
+                    {new Date(act.created_at).toLocaleString()}
+                  </span>
+                )}
               </li>
             ))}
           </ul>
         </div>
-      )}
+      ) : null}
 
       <textarea
         placeholder="Describe your mood..."

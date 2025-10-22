@@ -14,7 +14,8 @@ export function AuthModel({ isOpen, onClose, onLogin, onRegister }) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex justify-center items-center z-50">
+    <div className="fixed inset-0 bg-black/50 flex flex-col justify-center items-center z-50">
+      <h1 className="text-3xl font-bold mb-4">🎭 MoodMuse</h1>
       <div className="bg-white p-6 rounded-2xl w-80 shadow-lg">
         <h2 className="text-xl font-semibold mb-4">{isLogin ? "Login" : "Register"}</h2>
         <form onSubmit={handleSubmit}>

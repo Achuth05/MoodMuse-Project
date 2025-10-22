@@ -14,9 +14,15 @@ export default function App() {
   const [selectedMood, setSelectedMood] = useState("");
   const [selectedContentType, setSelectedContentType] = useState("movies");
   const [selectedLanguage, setSelectedLanguage] = useState("en");
-  const [user, setUser] = useState({ name: "User", email: "", isAuthenticated: false });
+  const [user, setUser] = useState({ 
+    name: "User", 
+    email: "", 
+    userId: null,
+    isAuthenticated: false 
+  });
   const [showAuthModal, setShowAuthModal] = useState(true);
   const [enteredText, setEnteredText] = useState("");
+
   // Login handler
   const handleLogin = async (email, password) => {
     try {
@@ -28,12 +34,14 @@ export default function App() {
       const data = await res.json();
       if (res.ok) {
         setUser({
-          name: data.user_metadata?.name || "User",
-          email: data.user,
+          name: data.user_metadata?.name || data.name || "User",
+          email: data.user || email,
+          // backend may not return a numeric user_id; fall back to email
+          userId: data.user_id || data.user || email,
           isAuthenticated: true,
           accessToken: data.access_token,
         });
-        toast.success(`Welcome back, ${data.user || "User"}!`);
+        toast.success(`Welcome back, ${data.user_metadata?.name || "User"}!`);
         setShowAuthModal(false);
         setCurrentView("landing");
       } else {
@@ -56,7 +64,9 @@ export default function App() {
       if (res.ok) {
         setUser({
           name: name || "User",
-          email: data.user,
+          email: data.user || email,
+          // backend may not return user_id; use returned email or provided email
+          userId: data.user_id || data.user || email,
           isAuthenticated: true,
         });
         toast.success(`Welcome to MoodMuse, ${name || "User"}!`);
@@ -74,9 +84,10 @@ export default function App() {
   const handleLogout = async () => {
     try {
       await fetch(`${BASE_URL}/auth/logout`, { method: "POST" });
-      setUser({ name: "User", email: "", isAuthenticated: false });
+      setUser({ name: "User", email: "", userId: null, isAuthenticated: false });
       setCurrentView("auth");
       setSelectedMood("");
+      setShowAuthModal(true);
       toast.success("Logged out successfully");
     } catch {
       toast.error("Error logging out");
@@ -85,7 +96,7 @@ export default function App() {
 
   // Mood submit from landing page
   const handleMoodSubmit = (mood, contentType, language, text) => {
-    setEnteredText(text)
+    setEnteredText(text);
     setSelectedMood(mood);
     setSelectedContentType(contentType);
     setSelectedLanguage(language);
@@ -123,6 +134,7 @@ export default function App() {
           currentLanguage={selectedLanguage}
           userName={user.name}
           userEmail={user.email}
+          userId={user.userId}
         />
       )}
 
@@ -136,6 +148,7 @@ export default function App() {
           onBack={handleBackToLanding}
           userName={user.name}
           userEmail={user.email}
+          userId={user.userId}
         />
       )}
 
@@ -144,6 +157,7 @@ export default function App() {
         <UserProfile
           userName={user.name}
           userEmail={user.email}
+          userId={user.userId}
           onBack={handleBackFromProfile}
           onLogout={handleLogout}
         />

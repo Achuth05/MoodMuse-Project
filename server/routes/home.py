@@ -15,56 +15,72 @@ def log_activity():
         return jsonify({"error": "Missing user_id or action"}), 400
 
     try:
-        resp = sb.table("activity_logs").insert({
+        # If the client sent an email as user_id, also include user_email column when inserting.
+        # Supabase will ignore unknown columns if they don't exist in the table schema.
+        insert_payload = {
             "user_id": user_id,
             "action": action,
-            "mood": mood
-        }).execute()
+            "mood": mood,
+        }
+        if isinstance(user_id, str) and "@" in user_id:
+            insert_payload["user_email"] = user_id
 
-        # return the inserted row when possible so frontend can confirm
+        resp = sb.table("activity_logs").insert(insert_payload).execute()
+
+        # Return the inserted row so frontend can confirm
         inserted = resp.data[0] if getattr(resp, "data", None) else None
         return jsonify({"status": "success", "activity": inserted})
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 
+        # Order by created_at descending (most recent first)
+        # Try matching `user_id` first; if that returns no rows, try `user_email`.
+        resp = (
+            sb.table("activity_logs")
+            .select("*")
+            .eq("user_id", user_id)
+            .order("created_at", desc=True)
+            .limit(limit)
+            .execute()
+        )
 
-@home_bp.route("/get_recent_activity", methods=["GET"])
-def get_recent_activity():
-    """Return recent activity rows for a user. Query params: user_id (required), limit (optional)"""
-    user_id = request.args.get("user_id")
-    try:
-        limit = int(request.args.get("limit", 10))
-    except Exception:
-        limit = 10
+        activities = resp.data or []
 
-    if not user_id:
+        if not activities:
+            # try user_email column as a fallback (some clients send email as identifier)
+            try:
+                resp2 = (
+                    sb.table("activity_logs")
+                    .select("*")
+                    .eq("user_email", user_id)
+                    .order("created_at", desc=True)
+                    .limit(limit)
+                    .execute()
+                )
+                activities = resp2.data or []
+            except Exception:
+                # if fallback fails, keep activities as empty list
+                activities = activities
+
+        return jsonify({"activities": activities})
         return jsonify({"activities": []})
 
     try:
-        # Try ordering by created_at first; if that column doesn't exist, fall back to log_id
-        try:
-            resp = (
-                sb.table("activity_logs")
-                .select("*")
-                .eq("user_id", user_id)
-                .order("created_at", desc=True)
-                .range(0, limit - 1)
-                .execute()
-            )
-        except Exception:
-            resp = (
-                sb.table("activity_logs")
-                .select("*")
-                .eq("user_id", user_id)
-                .order("log_id", desc=True)
-                .range(0, limit - 1)
-                .execute()
-            )
+        # Order by created_at descending (most recent first)
+        resp = (
+            sb.table("activity_logs")
+            .select("*")
+            .eq("user_id", user_id)
+            .order("created_at", desc=True)
+            .limit(limit)
+            .execute()
+        )
 
         activities = resp.data or []
         return jsonify({"activities": activities})
     except Exception as e:
         return jsonify({"error": str(e)}), 400
+
 
 @home_bp.route("/", methods=["POST"])
 def recommend_content():
@@ -93,7 +109,7 @@ def recommend_content():
         # Try exact match first
         mood_resp = sb.table("moods").select("mood_id, mood_name").eq("mood_name", mood_name).execute()
         if not mood_resp.data:
-            # Fallback: case-insensitive partial match (ilike) so 'Happy' matches 'Happy / Joyful'
+            # Fallback: case-insensitive partial match
             mood_resp = sb.table("moods").select("mood_id, mood_name").ilike("mood_name", f"%{mood_name}%").execute()
 
         if not mood_resp.data:
@@ -109,13 +125,12 @@ def recommend_content():
         if language:
             query = query.eq("language", language)
 
-        # Supabase uses range(offset, offset+limit-1) for pagination
         results = query.range(offset, offset + limit - 1).execute()
         data_list = results.data or []
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 
-    # Optionally log the search as activity if user_id provided in the request
+    # Log the search activity - this will automatically record to activity_logs
     user_id = data.get("user_id")
     if user_id:
         try:
@@ -125,7 +140,7 @@ def recommend_content():
                 "mood": mood_name,
             }).execute()
         except Exception:
-            # don't fail the whole request if logging fails
+            # Don't fail the whole request if logging fails
             pass
 
     return jsonify({
@@ -133,4 +148,3 @@ def recommend_content():
         "count": len(data_list),
         "results": data_list
     })
-
